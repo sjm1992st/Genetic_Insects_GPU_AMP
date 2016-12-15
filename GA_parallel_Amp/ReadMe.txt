@@ -2,39 +2,22 @@
     CONSOLE APPLICATION : GA_parallel_Amp Project Overview
 ========================================================================
 
-AppWizard has created this GA_parallel_Amp application for you.
+This project is an attempt to use the GPU to "accelerate" the process of
+genetic algorithms. So far the results have not shown a significant speed
+improvement however the project was fun to create because the subject of 
+GA has a diverse, dynamic and interesting set of algorithms.
 
-This file contains a summary of what you will find in each of the files that
-make up your GA_parallel_Amp application.
+I found a real problem with the roulette wheel implementation. I selected
+to process a matrix of dimension (population_size ^2) with row and columns
+storing indexes into the population for parent selection. This is based
+on the CDF cumulative distribution function of the fitness of the population
+rescaled to be between 0-1. The problem was that I had to lookup the CDF index
+based on an input value between 0 and 1, so taking these and scaling
+to discrete intervals of 1/population_size, then finding the Row value for 
+each column ... this was then indexed using the random values for parent selection
+to compute the inverse CDF (although I may have gone wrong somewhere - there is 
+an implementation of this in the main function).
 
-
-GA_parallel_Amp.vcxproj
-    This is the main project file for VC++ projects generated using an Application Wizard.
-    It contains information about the version of Visual C++ that generated the file, and
-    information about the platforms, configurations, and project features selected with the
-    Application Wizard.
-
-GA_parallel_Amp.vcxproj.filters
-    This is the filters file for VC++ projects generated using an Application Wizard. 
-    It contains information about the association between the files in your project 
-    and the filters. This association is used in the IDE to show grouping of files with
-    similar extensions under a specific node (for e.g. ".cpp" files are associated with the
-    "Source Files" filter).
-
-GA_parallel_Amp.cpp
-    This is the main application source file.
-
-/////////////////////////////////////////////////////////////////////////////
-Other standard files:
-
-StdAfx.h, StdAfx.cpp
-    These files are used to build a precompiled header (PCH) file
-    named GA_parallel_Amp.pch and a precompiled types file named StdAfx.obj.
-
-/////////////////////////////////////////////////////////////////////////////
-Other notes:
-
-AppWizard uses "TODO:" comments to indicate parts of the source code you
-should add to or customize.
-
-/////////////////////////////////////////////////////////////////////////////
+The process then finds the index with a parallel prefix sum scan of the Rows.
+However this method did not work in practice and so for choosing parents the working implementation still uses
+the vanilla GA method.
