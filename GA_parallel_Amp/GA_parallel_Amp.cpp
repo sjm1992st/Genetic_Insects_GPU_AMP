@@ -1055,6 +1055,13 @@ namespace SIMPLE_GA {
 
 			cout << endl;
 
+			// perform the prefix scan so each 
+			// preceding element is the sum of all 
+			// prior elements 
+			// e.g. 1 2 3 4
+			// becomes 1 3 6 10
+			// etc
+
 			prefix_scan<10, float>(cdf_aV);
 
 			float large_number = cdf_aV[population_size - 1];
@@ -1065,34 +1072,42 @@ namespace SIMPLE_GA {
 				cdf_aV[idx] = (float)local_population_size*cdf_aV[idx] / large_number;
 			});
 			cdf_aV.synchronize();
+
+
 			/*for (int i = 0; i < CDF.size(); i++)
 			{
 			cout << CDF[i] << " ";
 			}
 			cout << endl;
 			*/
-
-			
-
-
 		}
 
 		void SelectParent(vector<float> &row_vec)
 		{
 			{
-				
-
+			
+				// create a 2 dimensional matrix 
 
 				array_view<float, 2> a1(population.size(), population.size(), cdf_matrix);
 
+				// the CDF 
+
 				array_view<float, 2> a2(CDF.size(), 1, CDF);
 
-
+				// the current array of random numbers
 
 				array_view<float, 2> rand_n(CDF.size(), 1, rand);
 
+				// local required variables
+
 				float local_best_index = (float)this->best_index;
 				float local_population_size = (float)population_size;
+
+				// for each matrix element interpret the random number
+				// as a point on the y-axis of the CDF, then if the
+				// current thread is an intersection point store the 
+				// index of the column (x-axis index) in the matrix
+				// otherwise store zero
 
 				parallel_for_each(
 					a1.extent, [=](index<2> idx) restrict(amp)
@@ -1100,7 +1115,7 @@ namespace SIMPLE_GA {
 					int row = idx[0];
 					int col = idx[1];
 
-					float row_indexes_col = local_population_size*rand_n(row, 0);// (float)row / 50;
+					float row_indexes_col = local_population_size* rand_n(row, 0);// (float)row / 50;
 
 					float row_val = a2(row, 0);
 
@@ -1129,13 +1144,12 @@ namespace SIMPLE_GA {
 
 						}
 					}
-
-					//			a1(row, col) = row * 2 + col;
 				});
 				a1.synchronize();
 
 
-
+				// copy the rows of the matrix to vectors
+				// preparing for the sum of rows operation
 				for (int j = 0; j < CDF.size(); j++)
 				{
 					array_view<float, 2> row_a2(CDF.size(), 1, row_vectors[j]);
@@ -1156,6 +1170,10 @@ namespace SIMPLE_GA {
 					});
 
 				}
+
+				// for each vector sum over the vector and store the result
+				// the result should be the index of the population member
+				// selected by the inverse CDF.
 
 				for (int j = 0; j < CDF.size(); j++)
 				{
@@ -1229,30 +1247,46 @@ namespace SIMPLE_GA {
 
 		void ChooseMates()
 		{
+			// compute the CDF
 			compute_CDF();
+
+			// randomize and select twice
+			// note the random number is seeded by the random int,
+			// this could be more optimal as a pre-stored texture
+			// with shuffling 
+			// or perhaps a per-frame sobel random texture
+			// with dimensions equal to the number of times a random
+			// is needed. The random Vector is returned, it is probably
+			// a case of keeping the GPU resource for further processing
+
 			randomize_parallel(RandomInt(0, 65535), rand);
 
-			this->SelectParent(row_vec1);
+			SelectParent(row_vec1);
 
 			randomize_parallel(RandomInt(0, 65535), rand);
-			this->SelectParent(row_vec2);
+
+			SelectParent(row_vec2);
 
 
+			// creating the extent object
 			extent<1> e((int)population_size);
-			//vector<int> mating(size);
+			
+			// creating the operating arrays for the parallel function
 
 			array_view<int, 1> a(e, last_phase_mating_pool);
 			array_view<int, 1> a1(e, mating_pool);
 			array_view<float, 1> row_vec_1(e, row_vec1);
 			array_view<float, 1> row_vec_2(e, row_vec2);
 
-		
-
-			
+			// it is neccessary to upload the crossover points
+			// - they are computed here in a loop but they should
+			//   be GPU functions.
 			for (int i = 0; i < population_size; i++)
 				pop_crossover[i] = RandomInt(0, 25);
 
 			array_view<int, 1> cross_point(e, pop_crossover);
+
+			// some variables needed in the parallel function
 
 			float local_population_size = (float)population_size;
 			int local_best_index = this->best_index;
@@ -1260,11 +1294,8 @@ namespace SIMPLE_GA {
 				
 			parallel_for_each(e, [=](index<1> idx) restrict(amp) {
 
-				// forced to unwrap the Fitness function, 
-				// and as each bit is checked rather than a bool
-				// we have to loop here (but this is in parallel for each
-				// population member)
-				
+				// for each member [not the best member] 
+				// locate the mates and perform the bitwise crossover op
 				
 				int idx_1 = idx[0];
 				if (idx_1 != local_best_index )
@@ -1292,6 +1323,10 @@ namespace SIMPLE_GA {
 					a[idx] = output;
 				}
 			});
+
+			// synchronize the resource that has been written to
+			// to read back to CPU
+			
 			a.synchronize();
 
 			//for (int i = 0; i < population_size; i++)
@@ -1301,17 +1336,23 @@ namespace SIMPLE_GA {
 
 		void Mutate()
 		{
+			// mutation also needs a random gene
 			for (int i = 0; i < population_size; i++)
 				pop_crossover[i] = RandomInt(0, 25);
 
+			// another set of random numbers to determine
+			// whether mutation actually occurred
 			randomize_parallel(RandomInt(0, 65535), rand);
 
+			// creating the extent object
 			extent<1> e((int)population_size);
-			array_view<int, 1> mutate_point(e, pop_crossover);
 
+			// the array view objects
+			array_view<int, 1> mutate_point(e, pop_crossover);
 			array_view<int, 1> a(e, last_phase_mating_pool);
 			array_view<float, 1> rand_n(e, rand);
 
+			// local member variables
 			float mutation_rate_local = this->mutationRate;
 			int local_best_index = this->best_index;
 
@@ -1334,8 +1375,6 @@ namespace SIMPLE_GA {
 			});
 
 			a.synchronize();
-
-	
 		}
 
 		//
@@ -1368,8 +1407,7 @@ namespace SIMPLE_GA {
 
 				int score = 0;
 				for (int i = 0; i < 25; i++) {
-					//Is the character correct ?
-					
+
 					if (a[idx] & (1 << i))
 					{
 						if (targ & (1 << i))
@@ -1394,6 +1432,7 @@ namespace SIMPLE_GA {
 
 			max_fitness_val_AMP();
 
+			// 
 			this->sumFitness = sumArray_NaiveAMP(fitness);
 
 			int best_value = this->GetBest();
@@ -1431,6 +1470,9 @@ namespace SIMPLE_GA {
 
 				last_phase_mating_pool[i] = population[i].dna;
 			}*/
+
+			// parallel breeding functions
+
 			this->ChooseMates();
 			this->Mutate();
 
@@ -1746,7 +1788,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	
 
 	SimpleGA *example = new  SimpleGA();
-	example->SetPopulationSize(200);
+	example->SetPopulationSize(256);
 	example->Initialize();
 	while (example->solved == false)
 		example->Update();

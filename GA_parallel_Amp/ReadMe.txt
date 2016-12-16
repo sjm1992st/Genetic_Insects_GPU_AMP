@@ -28,5 +28,5 @@ New improvements:
 3) returned the best_index instead of zero
 4) changed the required fitness to be 96% (otherwise 200 epochs)
 
-more testing needs to be done before the reality of these improvements is clear
+more testing needs to be done before the reality of these improvements is clear.
 
