@@ -1255,34 +1255,42 @@ namespace SIMPLE_GA {
 			array_view<int, 1> cross_point(e, pop_crossover);
 
 			float local_population_size = (float)population_size;
-
+			int local_best_index = this->best_index;
+			
+				
 			parallel_for_each(e, [=](index<1> idx) restrict(amp) {
 
 				// forced to unwrap the Fitness function, 
 				// and as each bit is checked rather than a bool
 				// we have to loop here (but this is in parallel for each
 				// population member)
+				
+				
+				int idx_1 = idx[0];
+				if (idx_1 != local_best_index )
+				{ 
 
-				int i_1 = row_vec_1[idx] / local_population_size;
-				int i_2 = row_vec_2[idx] / local_population_size;
+					int i_1 = row_vec_1[idx] / local_population_size;
+					int i_2 = row_vec_2[idx] / local_population_size;
 
-				int dnaA = a1[i_1];
-				int dnaB = a1[i_2];
-				int cp = cross_point[idx];
+					int dnaA = a1[i_1];
+					int dnaB = a1[i_2];
+					int cp = cross_point[idx];
 
-				int output = 0;
+					int output = 0;
 
-				for (int x = 0; x < cp; x++)
-				{
-					if (dnaA & (1 << x))
-						output |= (1 << x);
+					for (int x = 0; x < cp; x++)
+					{
+						if (dnaA & (1 << x))
+							output |= (1 << x);
+					}
+					for (int x = cp; x < 32; x++)
+					{
+						if (dnaB & (1 << x))
+							output |= (1 << x);
+					}
+					a[idx] = output;
 				}
-				for (int x = cp; x < 32; x++)
-				{
-					if (dnaB & (1 << x))
-						output |= (1 << x);
-				}
-				a[idx] = output;
 			});
 			a.synchronize();
 
@@ -1305,10 +1313,11 @@ namespace SIMPLE_GA {
 			array_view<float, 1> rand_n(e, rand);
 
 			float mutation_rate_local = this->mutationRate;
+			int local_best_index = this->best_index;
 
 			parallel_for_each(e, [=](index<1> idx) restrict(amp) {
-
-				if (rand_n[idx] < mutation_rate_local)
+				int idx_1 = idx[0];
+				if ((rand_n[idx] < mutation_rate_local) && (idx_1 != local_best_index))
 				{
 					int gene_to_mutate = mutate_point[idx];
 
@@ -1357,10 +1366,6 @@ namespace SIMPLE_GA {
 			//evaluate fitness
 			parallel_for_each(e, [=](index<1> idx) restrict(amp) {
 
-				// forced to unwrap the Fitness function, 
-				// and as each bit is checked rather than a bool
-				// we have to loop here (but this is in parallel for each
-				// population member)
 				int score = 0;
 				for (int i = 0; i < 25; i++) {
 					//Is the character correct ?
@@ -1377,9 +1382,8 @@ namespace SIMPLE_GA {
 					}
 
 				}
-				//a[idx].fitness = 
+
 				fit_av[idx] = float(score) / 25.0;
-				//sumFitness += a[idx].fitness;
 				mating[idx] = a[idx];
 
 			});
@@ -1391,10 +1395,6 @@ namespace SIMPLE_GA {
 			max_fitness_val_AMP();
 
 			this->sumFitness = sumArray_NaiveAMP(fitness);
-
-			//fit_av.synchronize();
-		
-		//	compute_CDF();
 
 			int best_value = this->GetBest();
 
