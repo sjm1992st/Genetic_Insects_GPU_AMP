@@ -21,3 +21,12 @@ a single 32 bit integer) the optimizations should start to show that the paralle
 version is faster.
 
 This version completed for me in about 133 epochs, it is best compiled in release mode.
+
+New improvements: 
+1) used fitness ^ 2 in the CDF
+2) rescaled CDF to poopulation size instead of [0-1]
+3) returned the best_index instead of zero
+4) changed the required fitness to be 96% (otherwise 200 epochs)
+
+more testing needs to be done before the reality of these improvements is clear
+

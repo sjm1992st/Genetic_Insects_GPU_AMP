@@ -1023,7 +1023,7 @@ namespace SIMPLE_GA {
 					}
 				});
 			}
-		
+			index_vector_aV.synchronize();
 			this->best_index = index_vector_aV[0];
 			this->best_fitness = fitness[best_index];
 		}
@@ -1042,7 +1042,7 @@ namespace SIMPLE_GA {
 			float sum_fitness_local = this->sumFitness;
 
 			parallel_for_each(size, [=](index<1> idx) restrict(amp) {
-				cdf_aV[idx] = f_aV[idx];
+				cdf_aV[idx] = f_aV[idx] * f_aV[idx];
 			});
 
 			cdf_aV.synchronize();
@@ -1055,7 +1055,7 @@ namespace SIMPLE_GA {
 			int local_population_size = population_size;
 			parallel_for_each(size, [=](index<1> idx) restrict(amp) {
 				
-				cdf_aV[idx] = cdf_aV[idx] / cdf_aV[local_population_size - 1];
+				cdf_aV[idx] = float(local_population_size) * cdf_aV[idx] / cdf_aV[local_population_size - 1];
 			});
 			cdf_aV.synchronize();
 			/*for (int i = 0; i < CDF.size(); i++)
@@ -1084,19 +1084,22 @@ namespace SIMPLE_GA {
 
 				array_view<float, 2> rand_n(CDF.size(), 1, rand);
 
+				float local_best_index = (float)this->best_index;
+				float local_population_size = (float)population_size;
+
 				parallel_for_each(
 					a1.extent, [=](index<2> idx) restrict(amp)
 				{
 					int row = idx[0];
 					int col = idx[1];
 
-					float row_indexes_col = rand_n(row, 0);// (float)row / 50;
+					float row_indexes_col = local_population_size*rand_n(row, 0);// (float)row / 50;
 
 					float row_val = a2(row, 0);
 
 					if (row == 0)
 					{
-						a1(row, col) = 0.0;
+						a1(row, col) = local_best_index * local_population_size;
 					}
 					else
 					{
@@ -1115,7 +1118,7 @@ namespace SIMPLE_GA {
 						}
 						else
 						{
-							a1(row, col) = 0.0;
+							a1(row, col) = local_best_index * local_population_size;
 
 						}
 					}
@@ -1244,6 +1247,8 @@ namespace SIMPLE_GA {
 
 			array_view<int, 1> cross_point(e, pop_crossover);
 
+			float local_population_size = (float)population_size;
+
 			parallel_for_each(e, [=](index<1> idx) restrict(amp) {
 
 				// forced to unwrap the Fitness function, 
@@ -1251,8 +1256,8 @@ namespace SIMPLE_GA {
 				// we have to loop here (but this is in parallel for each
 				// population member)
 
-				int i_1 = row_vec_1[idx];
-				int i_2 = row_vec_2[idx];
+				int i_1 = row_vec_1[idx] / local_population_size;
+				int i_2 = row_vec_2[idx] / local_population_size;
 
 				int dnaA = a1[i_1];
 				int dnaB = a1[i_2];
@@ -1304,9 +1309,11 @@ namespace SIMPLE_GA {
 
 					if (dna & (1 << gene_to_mutate))
 					{
-						a[idx] |= (0 << gene_to_mutate);
+						dna |= (0 << gene_to_mutate);
 					}
-					else a[idx] |= (1 << gene_to_mutate);
+					else dna |= (1 << gene_to_mutate);
+
+					a[idx] = dna;
 				}
 			});
 
@@ -1572,7 +1579,7 @@ public:
 
 			std::cout << std::endl;
 
-			if (population3.best_fitness > 0.97f)
+			if (population3.best_fitness >= 0.96f)
 			{
 				solved = true; // print statistics
 				int best = population3.best_index;
