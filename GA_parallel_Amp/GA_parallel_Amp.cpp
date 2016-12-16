@@ -1042,7 +1042,7 @@ namespace SIMPLE_GA {
 			float sum_fitness_local = this->sumFitness;
 
 			parallel_for_each(size, [=](index<1> idx) restrict(amp) {
-				cdf_aV[idx] = f_aV[idx] / sum_fitness_local;
+				cdf_aV[idx] = f_aV[idx];
 			});
 
 			cdf_aV.synchronize();
@@ -1052,6 +1052,12 @@ namespace SIMPLE_GA {
 
 			prefix_scan<10, float>(cdf_aV);
 
+			int local_population_size = population_size;
+			parallel_for_each(size, [=](index<1> idx) restrict(amp) {
+				
+				cdf_aV[idx] = cdf_aV[idx] / cdf_aV[local_population_size - 1];
+			});
+			cdf_aV.synchronize();
 			/*for (int i = 0; i < CDF.size(); i++)
 			{
 			cout << CDF[i] << " ";
@@ -1217,6 +1223,8 @@ namespace SIMPLE_GA {
 			randomize_parallel(RandomInt(0, 65535), rand);
 
 			this->SelectParent(row_vec1);
+
+			randomize_parallel(RandomInt(0, 65535), rand);
 			this->SelectParent(row_vec2);
 
 
@@ -1252,17 +1260,17 @@ namespace SIMPLE_GA {
 
 				int output = 0;
 
-				for (int i = 0; i < cp; i++)
+				for (int x = 0; x < cp; x++)
 				{
-					if (dnaA & (1 << i))
-						a[idx] |= (1 << i);
+					if (dnaA & (1 << x))
+						output |= (1 << x);
 				}
-				for (int i = cp; i < 32; i++)
+				for (int x = cp; x < 32; x++)
 				{
-					if (dnaB & (1 << i))
-						a[idx] |= (1 << i);
+					if (dnaB & (1 << x))
+						output |= (1 << x);
 				}
-
+				a[idx] = output;
 			});
 			a.synchronize();
 
@@ -1304,11 +1312,7 @@ namespace SIMPLE_GA {
 
 			a.synchronize();
 
-			if (RandomFloat(0.0, 1.0) < mutationRate) {
-				int gene_to_mutate = RandomInt(0, 25);
-
-
-			}
+	
 		}
 
 		//
@@ -1387,10 +1391,10 @@ namespace SIMPLE_GA {
 			//	myfile << "SUM FITNESS: " << sumFitness << ", SUM FITNESS*100: " << sumFitness*100 << std::endl;
 
 
-			for (int i = 0; i < population.size(); i++) {
+/*			for (int i = 0; i < population.size(); i++) {
 
 				//std::string s = string_dna(population[i]->dna);
-				myfile /*<< s << "," */ << population[i].fitness << ",";// << std::endl;
+				myfile << population[i].fitness << ",";// << std::endl;
 
 				if (i == this->best_index)
 				{
@@ -1412,7 +1416,8 @@ namespace SIMPLE_GA {
 				population[i].dna = temp_mating_insect_storage.crossoverSinglePoint(partnerB);
 
 				last_phase_mating_pool[i] = population[i].dna;
-			}
+			}*/
+			this->ChooseMates();
 			this->Mutate();
 
 			myfile << mean_fitness << "," << std::endl;
@@ -1570,9 +1575,11 @@ public:
 			if (population3.best_fitness > 0.97f)
 			{
 				solved = true; // print statistics
+				int best = population3.best_index;
+				population3.population[best].dna = population3.GetBest();
 				std::cout << "****************************************************" << std::endl;
 				std::cout << std::endl << "Insect Chosen Characteristics" << std::endl;
-				int best = population3.best_index;
+				
 				
 				if (best < population3.population.size())
 				{
