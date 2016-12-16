@@ -1042,7 +1042,7 @@ namespace SIMPLE_GA {
 			float sum_fitness_local = this->sumFitness;
 
 			parallel_for_each(size, [=](index<1> idx) restrict(amp) {
-				cdf_aV[idx] = f_aV[idx] * f_aV[idx];
+				cdf_aV[idx] = f_aV[idx] * f_aV[idx] * f_aV[idx];
 			});
 
 			cdf_aV.synchronize();
@@ -1055,7 +1055,7 @@ namespace SIMPLE_GA {
 			int local_population_size = population_size;
 			parallel_for_each(size, [=](index<1> idx) restrict(amp) {
 				
-				cdf_aV[idx] = float(local_population_size) * cdf_aV[idx] / cdf_aV[local_population_size - 1];
+				cdf_aV[idx] =  cdf_aV[idx] / cdf_aV[local_population_size - 1];
 			});
 			cdf_aV.synchronize();
 			/*for (int i = 0; i < CDF.size(); i++)
@@ -1109,7 +1109,7 @@ namespace SIMPLE_GA {
 							float a2_col_sub1 = a2(col - 1, 0);
 							if ((a2_col >= row_indexes_col) && (a2_col_sub1 < row_indexes_col))
 							{
-								a1(row, col) = col;
+								a1(row, col) = local_population_size*(col - 1);
 							}
 							else
 							{
