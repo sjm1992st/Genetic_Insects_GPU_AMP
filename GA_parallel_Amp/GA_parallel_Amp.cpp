@@ -894,6 +894,9 @@ namespace SIMPLE_GA {
 		vector< float > row_vec1;
 		vector< float > row_vec2;
 		vector<int> pop_crossover;
+
+		int best_population_member_last_frame = 0;
+
 		Population()
 		{
 			InsectChromosome1 c1;
@@ -946,7 +949,7 @@ namespace SIMPLE_GA {
 
 		int GetBest()
 		{
-			return this->last_phase_mating_pool[best_index];
+			return best_population_member_last_frame;
 		}
 
 		void Initialize()
@@ -991,13 +994,14 @@ namespace SIMPLE_GA {
 			mating_pool_ptrA = &mating_pool;
 			mating_pool_ptrB = &last_phase_mating_pool;
 		}
+		vector<int> backup_indexes;
 		//============================================================================
 		//
 		//============================================================================
 		void max_fitness_val_AMP(){
 
 			// copy the vector
-			vector<int> backup_indexes;
+			
 			vector_copy_template<int>(this->index_vector, backup_indexes);
 
 			auto size = population.size();
@@ -1024,8 +1028,9 @@ namespace SIMPLE_GA {
 				});
 			}
 			index_vector_aV.synchronize();
-			this->best_index = index_vector_aV[0];
+			this->best_index = backup_indexes[0];
 			this->best_fitness = fitness[best_index];
+			this->best_population_member_last_frame = last_phase_mating_pool[best_index];
 		}
 
 
@@ -1042,7 +1047,7 @@ namespace SIMPLE_GA {
 			float sum_fitness_local = this->sumFitness;
 
 			parallel_for_each(size, [=](index<1> idx) restrict(amp) {
-				cdf_aV[idx] = f_aV[idx] * f_aV[idx] * f_aV[idx];
+				cdf_aV[idx] = f_aV[idx] * f_aV[idx];
 			});
 
 			cdf_aV.synchronize();
@@ -1052,10 +1057,12 @@ namespace SIMPLE_GA {
 
 			prefix_scan<10, float>(cdf_aV);
 
+			float large_number = cdf_aV[population_size - 1];
+
 			int local_population_size = population_size;
 			parallel_for_each(size, [=](index<1> idx) restrict(amp) {
 				
-				cdf_aV[idx] =  cdf_aV[idx] / cdf_aV[local_population_size - 1];
+				cdf_aV[idx] = (float)local_population_size*cdf_aV[idx] / large_number;
 			});
 			cdf_aV.synchronize();
 			/*for (int i = 0; i < CDF.size(); i++)
@@ -1099,7 +1106,7 @@ namespace SIMPLE_GA {
 
 					if (row == 0)
 					{
-						a1(row, col) = local_best_index * local_population_size;
+						a1(row, col) = local_population_size*local_best_index;
 					}
 					else
 					{
@@ -1109,7 +1116,7 @@ namespace SIMPLE_GA {
 							float a2_col_sub1 = a2(col - 1, 0);
 							if ((a2_col >= row_indexes_col) && (a2_col_sub1 < row_indexes_col))
 							{
-								a1(row, col) = local_population_size*(col - 1);
+								a1(row, col) = local_population_size*(col);
 							}
 							else
 							{
@@ -1118,7 +1125,7 @@ namespace SIMPLE_GA {
 						}
 						else
 						{
-							a1(row, col) = local_best_index * local_population_size;
+							a1(row, col) = 0.0;
 
 						}
 					}
@@ -1549,6 +1556,7 @@ public:
 	void SetPopulationSize(int n)
 	{
 		this->population_size = n;
+		
 	}
 
 	void Initialize()
@@ -1557,7 +1565,7 @@ public:
 		int randSelector = (int)RandomFloat(0, 23);
 		randSelector = (int)RandomFloat(0, 23);
 		randSelector = (int)RandomFloat(0, 23);
-
+		population3.population_size = population_size;
 		population3.Initialize();
 	}
 
@@ -1738,6 +1746,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	
 
 	SimpleGA *example = new  SimpleGA();
+	example->SetPopulationSize(200);
 	example->Initialize();
 	while (example->solved == false)
 		example->Update();
@@ -1989,6 +1998,9 @@ int _tmain(int argc, _TCHAR* argv[])
 		std::cout << temp[i] << " ";
 	std::cout << "\n";
 	}
+
+
+	delete index_vec;
 	return 0;
 } 
 
